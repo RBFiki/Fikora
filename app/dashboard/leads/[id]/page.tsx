@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AccionesLead from "./AccionesLead";
 
 export default async function LeadDetalle({ params }: { params: { id: string } }) {
   const { data: lead } = await supabase
@@ -27,15 +28,17 @@ export default async function LeadDetalle({ params }: { params: { id: string } }
             <p className="text-zinc-400 text-sm">{lead.telefono?.replace("whatsapp:", "")}</p>
           </div>
           <span className={`ml-auto text-xs px-3 py-1 rounded-full border ${
-            lead.estado === "calificado"
-              ? "bg-green-500/10 border-green-500/30 text-green-400"
-              : "bg-zinc-700/50 border-zinc-600 text-zinc-400"
+            lead.estado === "contactado"
+              ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
+              : lead.estado === "cerrado"
+              ? "bg-purple-500/10 border-purple-500/30 text-purple-400"
+              : "bg-green-500/10 border-green-500/30 text-green-400"
           }`}>
             {lead.estado}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-6">
           {[
             { label: "Telefono", value: lead.telefono?.replace("whatsapp:", "") },
             { label: "Horario preferido", value: lead.horario_preferido ?? "No especificado" },
@@ -49,7 +52,9 @@ export default async function LeadDetalle({ params }: { params: { id: string } }
           ))}
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <AccionesLead id={lead.id} estadoActual={lead.estado} />
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mt-6">
           <div className="p-6 border-b border-zinc-800">
             <h2 className="text-white font-semibold">Conversacion completa</h2>
           </div>
