@@ -32,13 +32,56 @@ function getDefaultConfig() {
   };
 }
 
-async function notificarVendedor(telefono: string, conversacion: string, config: any) {
+function extraerNombre(historial: Array<{role: string, content: string}>): string | null {
+  const textos = historial.map(m => m.content).join(" ").toLowerCase();
+  const patrones = [
+    /me llamo ([a-záéíóúñ]+)/i,
+    /soy ([a-záéíóúñ]+)/i,
+    /mi nombre es ([a-záéíóúñ]+)/i,
+    /llámame ([a-záéíóúñ]+)/i,
+  ];
+  for (const patron of patrones) {
+    const match = textos.match(patron);
+    if (match) return match[1].charAt(0).toUpperCase() + match[1].slice(1);
+  }
+  // Buscar nombre en respuestas del usuario (mensajes cortos de 1-2 palabras)
+  const mensajesUsuario = historial
+    .filter(m => m.role === "user")
+    .map(m => m.content.trim());
+  for (const msg of mensajesUsuario) {
+    const palabras = msg.split(" ");
+    if (palabras.length <= 2 && palabras[0].length > 2 && /^[A-ZÁÉÍÓÚÑ]/.test(palabras[0])) {
+      return palabras[0];
+    }
+  }
+  return null;
+}
+
+function extraerHorario(historial: Array<{role: string, content: string}>): string | null {
+  const textos = historial.map(m => m.content).join(" ");
+  const patrones = [
+    /en (\d+ hora[s]?)/i,
+    /a las (\d+(?::\d+)?(?:\s?[ap]m)?)/i,
+    /(\d+(?::\d+)?(?:\s?[ap]m))/i,
+    /(mañana|tarde|noche|lunes|martes|miércoles|jueves|viernes)/i,
+  ];
+  for (const patron of patrones) {
+    const match = textos.match(patron);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function notificarVendedor(telefono: string, nombre: string | null, conversacion: string, config: any) {
   if (!config.numero_notificacion) return;
   try {
     await twilioClient.messages.create({
       from: process.env.TWILIO_WHATSAPP_NUMBER,
       to: "whatsapp:" + config.numero_notificacion,
-      body: "Nuevo lead calificado en " + config.nombre_empresa + "!\n\nTelefono: " + telefono + "\n\n" + conversacion.slice(-500) + "\n\nContactalo pronto!",
+      body: "Nuevo lead calificado en " + config.nombre_empresa + "!\n\n" +
+        (nombre ? "Nombre: " + nombre + "\n" : "") +
+        "Telefono: " + telefono + "\n\n" +
+        conversacion.slice(-400) + "\n\nContactalo pronto!",
     });
   } catch (err) {
     console.error("Error notificando:", err);
@@ -52,7 +95,6 @@ export async function POST(request: NextRequest) {
     const telefono = formData.get("From") as string;
 
     const config = await getConfig();
-
     const empresa = config.nombre_empresa || "nuestra empresa";
     const agente = config.nombre_agente || "Sara";
     const producto = config.producto || "nuestros productos";
@@ -87,17 +129,22 @@ ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
     historial.push({ role: "assistant", content: textoRespuesta });
 
     const estaCalificado = textoRespuesta.toLowerCase().includes("asesor") &&
-      (textoRespuesta.toLowerCase().includes("llamar") || textoRespuesta.toLowerCase().includes("contactar") || textoRespuesta.toLowerCase().includes("pronto"));
+      (textoRespuesta.toLowerCase().includes("contactar") || textoRespuesta.toLowerCase().includes("llamar") || textoRespuesta.toLowerCase().includes("pronto"));
 
     if (estaCalificado) {
+      const nombre = extraerNombre(historial);
+      const horario = extraerHorario(historial);
       const conversacionCompleta = historial.map((m: any) => m.role + ": " + m.content).join("\n");
+      
       await supabase.from("leads").insert({
         telefono,
+        nombre: nombre,
+        horario_preferido: horario,
         estado: "calificado",
         conversacion: conversacionCompleta,
         bot_id: null,
       });
-      await notificarVendedor(telefono, conversacionCompleta, config);
+      await notificarVendedor(telefono, nombre, conversacionCompleta, config);
     }
 
     const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Message>' + textoRespuesta + '</Message></Response>';
