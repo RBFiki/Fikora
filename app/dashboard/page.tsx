@@ -6,9 +6,18 @@ export default async function Dashboard() {
     .select("*")
     .order("created_at", { ascending: false });
 
+  const { data: bot } = await supabase
+    .from("bots")
+    .select("*")
+    .eq("id", "00000000-0000-0000-0000-000000000001")
+    .single();
+
   const total = leads?.length ?? 0;
   const calificados = leads?.filter((l) => l.estado === "calificado").length ?? 0;
-  const nuevos = leads?.filter((l) => l.estado === "nuevo").length ?? 0;
+  const hoy = new Date().toISOString().split("T")[0];
+  const nuevosHoy = leads?.filter((l) => l.created_at?.startsWith(hoy)).length ?? 0;
+  const nombreAgente = bot?.nombre_agente ?? "tu agente";
+  const nombreEmpresa = bot?.nombre_empresa ?? "";
 
   return (
     <main className="min-h-screen bg-zinc-950 p-8">
@@ -16,7 +25,9 @@ export default async function Dashboard() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-bold text-white">Panel Fikora</h1>
-            <p className="text-zinc-400 text-sm">Leads de tu agente Sara</p>
+            <p className="text-zinc-400 text-sm">
+              Leads de {nombreAgente}{nombreEmpresa ? " · " + nombreEmpresa : ""}
+            </p>
           </div>
           <span className="bg-green-500/10 border border-green-500/30 text-green-400 text-xs px-3 py-1 rounded-full">
             Agente activo
@@ -27,7 +38,7 @@ export default async function Dashboard() {
           {[
             { label: "Total leads", value: total, color: "text-white" },
             { label: "Calificados", value: calificados, color: "text-green-400" },
-            { label: "Nuevos hoy", value: nuevos, color: "text-amber-400" },
+            { label: "Nuevos hoy", value: nuevosHoy, color: "text-amber-400" },
           ].map((stat) => (
             <div key={stat.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
               <p className="text-zinc-500 text-sm mb-1">{stat.label}</p>
@@ -47,7 +58,7 @@ export default async function Dashboard() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-white font-medium">{lead.nombre ?? "Sin nombre"}</p>
-                      <p className="text-zinc-400 text-sm">{lead.telefono}</p>
+                      <p className="text-zinc-400 text-sm">{lead.telefono?.replace("whatsapp:", "")}</p>
                       {lead.horario_preferido && (
                         <p className="text-zinc-500 text-xs mt-1">Horario: {lead.horario_preferido}</p>
                       )}
@@ -70,7 +81,7 @@ export default async function Dashboard() {
             ) : (
               <div className="p-12 text-center">
                 <p className="text-zinc-500">Aun no hay leads.</p>
-                <p className="text-zinc-600 text-sm mt-1">Cuando Sara califique un prospecto aparecera aqui.</p>
+                <p className="text-zinc-600 text-sm mt-1">Cuando {nombreAgente} califique un prospecto aparecera aqui.</p>
               </div>
             )}
           </div>
