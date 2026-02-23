@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 
 export default function Configuracion() {
-  const router = useRouter();
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [generando, setGenerando] = useState(false);
   const [config, setConfig] = useState({
-    nombre_agente: "Aura",
-    producto: "seguros de vida, auto y hogar",
+    nombre_empresa: "",
+    nombre_agente: "Sara",
+    producto: "",
     tono: "profesional y amable",
     objeciones: "",
     horario_contacto: "Lunes a Viernes 9am - 6pm",
@@ -40,7 +39,7 @@ export default function Configuracion() {
       });
       const data = await res.json();
       if (data.objeciones) {
-        setConfig({ ...config, objeciones: data.objeciones });
+        setConfig((prev) => ({ ...prev, objeciones: data.objeciones }));
         setGuardado(false);
       }
     } catch {
@@ -78,9 +77,20 @@ export default function Configuracion() {
         </div>
 
         <div className="space-y-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <label className="block text-sm font-medium text-zinc-300 mb-3">Nombre de la empresa</label>
+            <input
+              name="nombre_empresa"
+              value={config.nombre_empresa}
+              onChange={handleChange}
+              placeholder="Indigal, Mi Tienda, etc."
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors text-sm"
+            />
+          </div>
+
           {[
-            { name: "nombre_agente", label: "Nombre del agente", placeholder: "Aura" },
-            { name: "producto", label: "Producto o servicio que vende", placeholder: "Seguros de vida, auto y hogar" },
+            { name: "nombre_agente", label: "Nombre del agente", placeholder: "Sara, Aura, Luna..." },
+            { name: "producto", label: "Productos o servicios que vende", placeholder: "Chaquetas, Tote Bags, Pijamas y Carteras" },
             { name: "tono", label: "Tono de comunicacion", placeholder: "Profesional y amable" },
             { name: "horario_contacto", label: "Horario de atencion", placeholder: "Lunes a Viernes 9am - 6pm" },
           ].map((campo) => (
@@ -119,7 +129,7 @@ export default function Configuracion() {
 
           <div className="bg-zinc-900 border border-amber-500/20 rounded-xl p-6">
             <label className="block text-sm font-medium text-amber-400 mb-1">Numero de WhatsApp para notificaciones</label>
-            <p className="text-zinc-500 text-xs mb-3">Cuando tu agente califique un lead, te avisamos aqui inmediatamente</p>
+            <p className="text-zinc-500 text-xs mb-3">Cuando tu agente califique un lead, te avisamos inmediatamente</p>
             <input
               name="numero_notificacion"
               value={config.numero_notificacion}
@@ -133,7 +143,7 @@ export default function Configuracion() {
             <h3 className="text-white font-medium mb-4">Vista previa del primer mensaje</h3>
             <div className="bg-zinc-800 rounded-lg p-4">
               <p className="text-green-400 text-sm">
-                Hola! Soy {config.nombre_agente}, agente de ventas de {config.producto}. Me gustaria conocer tus necesidades. En que te puedo ayudar hoy?
+                Hola! Soy {config.nombre_agente || "Sara"}, agente de {config.nombre_empresa || "nuestra empresa"}. {config.producto ? "Vendemos " + config.producto + "." : ""} En que te puedo ayudar hoy?
               </p>
             </div>
           </div>
