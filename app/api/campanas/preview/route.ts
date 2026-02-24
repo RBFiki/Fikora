@@ -16,7 +16,6 @@ export async function POST(request: NextRequest) {
 
     const agente = bot?.nombre_agente || "Sara";
     const empresa = bot?.nombre_empresa || "nuestra empresa";
-    const producto = bot?.producto || "nuestros productos";
     const tono = bot?.tono || "profesional y amable";
 
     const res = await openai.chat.completions.create({
@@ -26,12 +25,13 @@ export async function POST(request: NextRequest) {
           role: "system",
           content: `Eres ${agente} de ${empresa}. Tu tono es ${tono}.
 Genera un mensaje de WhatsApp de apertura para una campaña llamada "${nombre}".
-El mensaje debe:
-- Ser corto (máximo 3 líneas)
-- Sonar natural y humano, no como spam
-- Mencionar brevemente el producto: ${producto}
-- Terminar con una pregunta abierta que invite a responder
-- ${nombreLead ? `Empezar con "Hola ${nombreLead}!"` : 'Empezar con "Hola!"'}
+IMPORTANTE:
+- El mensaje debe hablar SOLO del tema de la campaña: "${nombre}"
+- NO menciones otros productos ni categorías
+- Sé específico al tema de la campaña
+- Máximo 3 líneas, natural y humano
+- Termina con una pregunta abierta
+- ${nombreLead ? `Empieza con "Hola ${nombreLead}!"` : 'Empieza con "Hola!"'}
 Responde SOLO con el mensaje, sin comillas ni explicaciones.`
         }
       ],

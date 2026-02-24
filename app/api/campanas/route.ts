@@ -16,14 +16,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { nombre, leads } = await request.json();
+    const { nombre, leads, mensajePersonalizado } = await request.json();
     if (!nombre || !leads?.length) {
       return NextResponse.json({ error: "Nombre y leads son requeridos" }, { status: 400 });
     }
 
     const { data: campana, error: errorCampana } = await supabase
       .from("campanas")
-      .insert({ nombre, total_leads: leads.length, estado: "borrador" })
+      .insert({ nombre, total_leads: leads.length, estado: "borrador", mensaje_personalizado: mensajePersonalizado || null })
       .select()
       .single();
     if (errorCampana) throw errorCampana;

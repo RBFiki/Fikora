@@ -10,10 +10,10 @@ export default function Campanas() {
   const [campanas, setCampanas] = useState<Campana[]>([]);
   const [creando, setCreando] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [mensajeEditado, setMensajeEditado] = useState("");
   const [leads, setLeads] = useState<Lead[]>([{ nombre: "", telefono: "" }]);
   const [cargando, setCargando] = useState(false);
   const [previewing, setPreviewing] = useState(false);
-  const [preview, setPreview] = useState("");
   const [iniciando, setIniciando] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,9 +60,9 @@ export default function Campanas() {
         body: JSON.stringify({ nombre, nombreLead: leads[0]?.nombre || null }),
       });
       const data = await res.json();
-      if (data.mensaje) setPreview(data.mensaje);
+      if (data.mensaje) setMensajeEditado(data.mensaje);
     } catch {
-      setPreview("Error generando preview.");
+      setMensajeEditado("Error generando mensaje.");
     } finally {
       setPreviewing(false);
     }
@@ -75,13 +75,13 @@ export default function Campanas() {
       const res = await fetch("/api/campanas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, leads: leads.filter((l) => l.telefono) }),
+        body: JSON.stringify({ nombre, leads: leads.filter((l) => l.telefono), mensajePersonalizado: mensajeEditado }),
       });
       if (!res.ok) throw new Error();
       setCreando(false);
       setNombre("");
       setLeads([{ nombre: "", telefono: "" }]);
-      setPreview("");
+      setMensajeEditado("");
       setMensaje("Campaña creada. Cuando estés listo presiona Iniciar.");
       cargarCampanas();
     } catch {
@@ -120,10 +120,7 @@ export default function Campanas() {
             <h1 className="text-2xl font-bold text-white">Campañas</h1>
             <p className="text-zinc-400 text-sm">Contacta leads de forma proactiva</p>
           </div>
-          <button
-            onClick={() => setCreando(true)}
-            className="bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-colors"
-          >
+          <button onClick={() => setCreando(true)} className="bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">
             + Nueva campaña
           </button>
         </div>
@@ -144,8 +141,8 @@ export default function Campanas() {
               <div className="flex gap-3">
                 <input
                   value={nombre}
-                  onChange={(e) => { setNombre(e.target.value); setPreview(""); }}
-                  placeholder="Ej: Lanzamiento chaquetas marzo"
+                  onChange={(e) => { setNombre(e.target.value); setMensajeEditado(""); }}
+                  placeholder="Ej: Llegada de nuevas pijamas"
                   className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors text-sm"
                 />
                 <button
@@ -153,27 +150,32 @@ export default function Campanas() {
                   disabled={!nombre || previewing}
                   className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white px-4 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
                 >
-                  {previewing ? "..." : "✨ Ver mensaje"}
+                  {previewing ? "Generando..." : "✨ Generar mensaje"}
                 </button>
               </div>
             </div>
 
-            {preview && (
+            {mensajeEditado && (
               <div className="mb-6 bg-zinc-800 border border-zinc-700 rounded-xl p-4">
-                <p className="text-zinc-400 text-xs mb-2">Preview del mensaje que recibirán:</p>
-                <p className="text-green-400 text-sm">{preview}</p>
-                <button onClick={generarPreview} disabled={previewing} className="text-zinc-500 hover:text-zinc-300 text-xs mt-2 transition-colors">
-                  {previewing ? "Generando..." : "↻ Regenerar"}
-                </button>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-zinc-400 text-xs">Mensaje que recibirán — puedes editarlo:</p>
+                  <button onClick={generarPreview} disabled={previewing} className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
+                    {previewing ? "..." : "↻ Regenerar"}
+                  </button>
+                </div>
+                <textarea
+                  value={mensajeEditado}
+                  onChange={(e) => setMensajeEditado(e.target.value)}
+                  rows={4}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-green-400 text-sm focus:outline-none focus:border-green-500 transition-colors resize-none"
+                />
+                <p className="text-zinc-600 text-xs mt-1">{mensajeEditado.length} caracteres</p>
               </div>
             )}
 
             <div className="mb-4 flex items-center gap-4">
               <h3 className="text-zinc-300 text-sm font-medium">Leads</h3>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors"
-              >
+              <button onClick={() => fileRef.current?.click()} className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors">
                 📎 Importar CSV
               </button>
               <input ref={fileRef} type="file" accept=".csv" onChange={handleCSV} className="hidden" />
@@ -214,10 +216,7 @@ export default function Campanas() {
               >
                 {cargando ? "Creando..." : "Crear campaña"}
               </button>
-              <button
-                onClick={() => { setCreando(false); setPreview(""); }}
-                className="text-zinc-400 hover:text-white px-6 py-3 rounded-xl text-sm transition-colors"
-              >
+              <button onClick={() => { setCreando(false); setMensajeEditado(""); }} className="text-zinc-400 hover:text-white px-6 py-3 rounded-xl text-sm transition-colors">
                 Cancelar
               </button>
             </div>
@@ -249,10 +248,7 @@ export default function Campanas() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Link
-                      href={"/dashboard/campanas/" + campana.id}
-                      className="text-xs border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 px-3 py-2 rounded-lg transition-colors"
-                    >
+                    <Link href={"/dashboard/campanas/" + campana.id} className="text-xs border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 px-3 py-2 rounded-lg transition-colors">
                       Ver leads
                     </Link>
                     {campana.estado === "borrador" && (
