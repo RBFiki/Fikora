@@ -28,29 +28,30 @@ async function saveHistorial(telefono: string, historial: any[]) {
   await supabase.from("conversaciones").upsert({ telefono, historial, updated_at: new Date().toISOString() });
 }
 
-function extraerNombre(historial: any[]): string | null {
-  const textos = historial.filter(m => m.role === "user").map(m => m.content).join(" ");
-  const patrones = [/me llamo ([a-záéíóúñ]+)/i, /soy ([a-záéíóúñ]+)/i, /mi nombre es ([a-záéíóúñ]+)/i];
-  for (const patron of patrones) {
-    const match = textos.match(patron);
-    if (match) return match[1].charAt(0).toUpperCase() + match[1].slice(1);
+async function extraerDatos(historial: any[]): Promise<{ nombre: string | null; horario: string | null }> {
+  try {
+    const conversacion = historial.map((m) => m.role + ": " + m.content).join("\n");
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `Extrae el nombre y horario preferido del cliente de esta conversacion. 
+Responde SOLO con JSON valido en este formato exacto:
+{"nombre": "Rafael", "horario": "en 1 hora"}
+Si no encuentras el dato, usa null.
+{"nombre": null, "horario": null}`
+        },
+        { role: "user", content: conversacion }
+      ],
+      max_tokens: 50,
+    });
+    const texto = res.choices[0].message.content ?? "{}";
+    const limpio = texto.replace(/```json|```/g, "").trim();
+    return JSON.parse(limpio);
+  } catch {
+    return { nombre: null, horario: null };
   }
-  const mensajes = historial.filter(m => m.role === "user").map(m => m.content.trim());
-  for (const msg of mensajes) {
-    const palabras = msg.split(" ");
-    if (palabras.length <= 2 && palabras[0].length > 2 && /^[A-ZÁÉÍÓÚÑ]/.test(palabras[0])) return palabras[0];
-  }
-  return null;
-}
-
-function extraerHorario(historial: any[]): string | null {
-  const textos = historial.map(m => m.content).join(" ");
-  const patrones = [/en (\d+ hora[s]?)/i, /a las (\d+(?::\d+)?(?:\s?[ap]m)?)/i, /(mañana|tarde|noche)/i];
-  for (const patron of patrones) {
-    const match = textos.match(patron);
-    if (match) return match[1];
-  }
-  return null;
 }
 
 async function notificarVendedor(telefono: string, nombre: string | null, conversacion: string, config: any) {
@@ -59,7 +60,10 @@ async function notificarVendedor(telefono: string, nombre: string | null, conver
     await twilioClient.messages.create({
       from: process.env.TWILIO_WHATSAPP_NUMBER,
       to: "whatsapp:" + config.numero_notificacion,
-      body: "Nuevo lead en " + config.nombre_empresa + "!\n\n" + (nombre ? "Nombre: " + nombre + "\n" : "") + "Telefono: " + telefono + "\n\n" + conversacion.slice(-400) + "\n\nContactalo pronto!",
+      body: "Nuevo lead en " + config.nombre_empresa + "!\n\n" +
+        (nombre ? "Nombre: " + nombre + "\n" : "") +
+        "Telefono: " + telefono + "\n\n" +
+        conversacion.slice(-400) + "\n\nContactalo pronto!",
     });
   } catch (err) { console.error("Error notificando:", err); }
 }
@@ -76,11 +80,12 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `Eres ${config.nombre_agente || "Sara"}, agente de ventas de ${config.nombre_empresa || "nuestra empresa"}.
 Vendemos: ${config.producto || "nuestros productos"}.
 Tono: ${config.tono}.
-Horario: ${config.horario_contacto}.
+Horario de atencion: ${config.horario_contacto}.
 Tu mision es tener una conversacion natural y conectar al cliente con un asesor cuando este listo.
-Haz UNA pregunta a la vez. Cuando el cliente muestre interes, pregunta su nombre y horario para contactarle.
-Cuando tengas nombre y horario, confirma que un asesor le contactara pronto.
-Responde en español, maximo 3 lineas. No des precios.
+- Haz UNA pregunta a la vez.
+- Cuando el cliente muestre interes, pregunta su nombre y horario para contactarle.
+- Cuando tengas nombre y horario, confirma que un asesor le contactara pronto.
+- Responde en español, maximo 3 lineas. No des precios.
 ${config.objeciones ? "\nObjeciones:\n" + config.objeciones : ""}`;
 
     historial.push({ role: "user", content: mensaje });
@@ -99,10 +104,16 @@ ${config.objeciones ? "\nObjeciones:\n" + config.objeciones : ""}`;
       (textoRespuesta.toLowerCase().includes("contactar") || textoRespuesta.toLowerCase().includes("llamar") || textoRespuesta.toLowerCase().includes("pronto"));
 
     if (estaCalificado) {
-      const nombre = extraerNombre(historial);
-      const horario = extraerHorario(historial);
+      const { nombre, horario } = await extraerDatos(historial);
       const conversacionCompleta = historial.map((m: any) => m.role + ": " + m.content).join("\n");
-      await supabase.from("leads").insert({ telefono, nombre, horario_preferido: horario, estado: "calificado", conversacion: conversacionCompleta, bot_id: null });
+      await supabase.from("leads").insert({
+        telefono,
+        nombre,
+        horario_preferido: horario,
+        estado: "calificado",
+        conversacion: conversacionCompleta,
+        bot_id: null,
+      });
       await notificarVendedor(telefono, nombre, conversacionCompleta, config);
     }
 
