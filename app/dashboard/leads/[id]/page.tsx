@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import AccionesLead from "./AccionesLead";
 
+export const dynamic = "force-dynamic";
+
 export default async function LeadDetalle({ params }: { params: { id: string } }) {
   const { data: lead } = await supabase
     .from("leads")
@@ -32,6 +34,8 @@ export default async function LeadDetalle({ params }: { params: { id: string } }
               ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
               : lead.estado === "cerrado"
               ? "bg-purple-500/10 border-purple-500/30 text-purple-400"
+              : lead.estado === "descartado"
+              ? "bg-zinc-700/50 border-zinc-600 text-zinc-400"
               : "bg-green-500/10 border-green-500/30 text-green-400"
           }`}>
             {lead.estado}
