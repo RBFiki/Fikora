@@ -1,61 +1,61 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function FormularioContacto() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ nombre: "", empresa: "", email: "", telefono: "" });
+  const [cargando, setCargando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
     setError("");
+  };
 
-    const form = e.currentTarget;
-    const data = {
-      nombre: (form.elements.namedItem("nombre") as HTMLInputElement).value,
-      empresa: (form.elements.namedItem("empresa") as HTMLInputElement).value,
-      email: (form.elements.namedItem("email") as HTMLInputElement).value,
-      telefono: (form.elements.namedItem("telefono") as HTMLInputElement).value,
-    };
-
+  const handleSubmit = async () => {
+    if (!form.nombre || !form.email) { setError("Nombre y email son requeridos"); return; }
+    setCargando(true);
     try {
-      const res = await fetch("/api/lead", {
+      const res = await fetch("/api/demo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(form),
       });
-
       if (!res.ok) throw new Error("Error al enviar");
-      router.push("/gracias");
+      setEnviado(true);
     } catch {
-      setError("Hubo un error. Por favor intenta de nuevo.");
+      setError("Hubo un error. Intenta de nuevo.");
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
+  };
+
+  if (enviado) {
+    return (
+      <section className="bg-zinc-950 py-24 px-6" id="demo">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-12 text-center">
+            <div className="text-4xl mb-4">🎉</div>
+            <h3 className="text-2xl font-bold text-white mb-2">Solicitud recibida</h3>
+            <p className="text-zinc-400">Te contactamos en menos de 24 horas para agendar tu demo.</p>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (
-    <section id="contacto" className="bg-zinc-900 py-32 border-t border-zinc-800">
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+    <section className="bg-zinc-950 py-24 px-6" id="demo">
+      <div className="max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div>
-            <span className="text-green-400 text-sm font-medium tracking-widest uppercase">Empieza hoy</span>
-            <h2 className="mt-3 text-4xl font-bold text-white mb-6">
-              Agenda una demo<br />en 30 minutos.
-            </h2>
-            <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-              Te mostramos el agente funcionando en vivo con tu producto. Sin PowerPoints, sin promesas vacías.
-            </p>
+            <span className="text-green-400 text-sm font-medium tracking-wide uppercase">Empieza hoy</span>
+            <h2 className="text-4xl font-bold text-white mt-2 mb-4">Agenda una demo<br />en 30 minutos.</h2>
+            <p className="text-zinc-400 mb-8">Te mostramos el agente funcionando en vivo con tu producto. Sin PowerPoints, sin promesas vacías.</p>
             <ul className="space-y-3">
-              {[
-                "Demo en vivo con tu caso de uso",
-                "Estimado de leads que puedes contactar",
-                "Sin compromiso de contratación",
-              ].map((item) => (
-                <li key={item} className="flex items-center gap-3 text-zinc-300">
+              {["Demo en vivo con tu caso de uso", "Estimado de leads que puedes contactar", "Sin compromiso de contratación"].map((item) => (
+                <li key={item} className="flex items-center gap-3 text-zinc-300 text-sm">
                   <span className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-400 text-xs">✓</span>
                   {item}
                 </li>
@@ -63,40 +63,42 @@ export default function FormularioContacto() {
             </ul>
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-8 space-y-5">
-            {[
-              { name: "nombre", label: "Nombre completo", type: "text", placeholder: "Ana García" },
-              { name: "empresa", label: "Empresa", type: "text", placeholder: "Acme S.A." },
-              { name: "email", label: "Email", type: "email", placeholder: "ana@empresa.com" },
-              { name: "telefono", label: "WhatsApp / Teléfono", type: "tel", placeholder: "+52 55 1234 5678" },
-            ].map((field) => (
-              <div key={field.name}>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">{field.label}</label>
-                <input
-                  name={field.name}
-                  type={field.type}
-                  placeholder={field.placeholder}
-                  required
-                  disabled={loading}
-                  className="w-full bg-zinc-900 border border-zinc-600 rounded-lg px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors disabled:opacity-50"
-                />
-              </div>
-            ))}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+            <div className="space-y-4">
+              {[
+                { name: "nombre", label: "Nombre completo", placeholder: "Ana García" },
+                { name: "empresa", label: "Empresa", placeholder: "Acme S.A." },
+                { name: "email", label: "Email", placeholder: "ana@empresa.com", type: "email" },
+                { name: "telefono", label: "WhatsApp / Teléfono", placeholder: "+52 55 1234 5678" },
+              ].map((campo) => (
+                <div key={campo.name}>
+                  <label className="block text-zinc-400 text-xs mb-2">{campo.label}</label>
+                  <input
+                    type={campo.type ?? "text"}
+                    name={campo.name}
+                    value={form[campo.name as keyof typeof form]}
+                    onChange={handleChange}
+                    placeholder={campo.placeholder}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors text-sm"
+                  />
+                </div>
+              ))}
+            </div>
 
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && (
+              <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
 
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              onClick={handleSubmit}
+              disabled={cargando}
+              className="w-full mt-6 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-bold py-4 rounded-xl transition-colors text-sm"
             >
-              {loading ? (
-                <><span className="animate-spin">⟳</span> Enviando...</>
-              ) : (
-                "Quiero ver la demo →"
-              )}
+              {cargando ? "Enviando..." : "Quiero ver la demo →"}
             </button>
-          </form>
+          </div>
         </div>
       </div>
     </section>
