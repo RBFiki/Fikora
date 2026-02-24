@@ -12,6 +12,8 @@ export default function Campanas() {
   const [nombre, setNombre] = useState("");
   const [leads, setLeads] = useState<Lead[]>([{ nombre: "", telefono: "" }]);
   const [cargando, setCargando] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState("");
   const [iniciando, setIniciando] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -48,6 +50,24 @@ export default function Campanas() {
   };
   const eliminarLead = (i: number) => setLeads(leads.filter((_, idx) => idx !== i));
 
+  const generarPreview = async () => {
+    if (!nombre) return;
+    setPreviewing(true);
+    try {
+      const res = await fetch("/api/campanas/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre, nombreLead: leads[0]?.nombre || null }),
+      });
+      const data = await res.json();
+      if (data.mensaje) setPreview(data.mensaje);
+    } catch {
+      setPreview("Error generando preview.");
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const crearCampana = async () => {
     if (!nombre || !leads.filter((l) => l.telefono).length) return;
     setCargando(true);
@@ -61,6 +81,7 @@ export default function Campanas() {
       setCreando(false);
       setNombre("");
       setLeads([{ nombre: "", telefono: "" }]);
+      setPreview("");
       setMensaje("Campaña creada. Cuando estés listo presiona Iniciar.");
       cargarCampanas();
     } catch {
@@ -108,8 +129,9 @@ export default function Campanas() {
         </div>
 
         {mensaje && (
-          <div className="mb-6 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3">
+          <div className="mb-6 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 flex justify-between items-center">
             <p className="text-zinc-300 text-sm">{mensaje}</p>
+            <button onClick={() => setMensaje("")} className="text-zinc-600 hover:text-zinc-400 text-xs">✕</button>
           </div>
         )}
 
@@ -119,13 +141,32 @@ export default function Campanas() {
 
             <div className="mb-6">
               <label className="block text-zinc-400 text-xs mb-2">Nombre de la campaña</label>
-              <input
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ej: Lanzamiento chaquetas marzo"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors text-sm"
-              />
+              <div className="flex gap-3">
+                <input
+                  value={nombre}
+                  onChange={(e) => { setNombre(e.target.value); setPreview(""); }}
+                  placeholder="Ej: Lanzamiento chaquetas marzo"
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors text-sm"
+                />
+                <button
+                  onClick={generarPreview}
+                  disabled={!nombre || previewing}
+                  className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white px-4 py-3 rounded-xl text-sm transition-colors whitespace-nowrap"
+                >
+                  {previewing ? "..." : "✨ Ver mensaje"}
+                </button>
+              </div>
             </div>
+
+            {preview && (
+              <div className="mb-6 bg-zinc-800 border border-zinc-700 rounded-xl p-4">
+                <p className="text-zinc-400 text-xs mb-2">Preview del mensaje que recibirán:</p>
+                <p className="text-green-400 text-sm">{preview}</p>
+                <button onClick={generarPreview} disabled={previewing} className="text-zinc-500 hover:text-zinc-300 text-xs mt-2 transition-colors">
+                  {previewing ? "Generando..." : "↻ Regenerar"}
+                </button>
+              </div>
+            )}
 
             <div className="mb-4 flex items-center gap-4">
               <h3 className="text-zinc-300 text-sm font-medium">Leads</h3>
@@ -139,7 +180,7 @@ export default function Campanas() {
               <span className="text-zinc-600 text-xs">Formato: nombre,telefono</span>
             </div>
 
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-4">
               {leads.map((lead, i) => (
                 <div key={i} className="flex gap-3">
                   <input
@@ -174,7 +215,7 @@ export default function Campanas() {
                 {cargando ? "Creando..." : "Crear campaña"}
               </button>
               <button
-                onClick={() => setCreando(false)}
+                onClick={() => { setCreando(false); setPreview(""); }}
                 className="text-zinc-400 hover:text-white px-6 py-3 rounded-xl text-sm transition-colors"
               >
                 Cancelar
