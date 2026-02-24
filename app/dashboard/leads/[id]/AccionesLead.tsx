@@ -1,21 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AccionesLead({ id, estadoActual }: { id: string; estadoActual: string }) {
   const [estado, setEstado] = useState(estadoActual);
   const [cargando, setCargando] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetch("/api/leads/" + id)
+      .then((r) => r.json())
+      .then((data) => { if (data.estado) setEstado(data.estado); })
+      .catch(() => {});
+  }, [id]);
+
   const cambiarEstado = async (nuevoEstado: string) => {
     if (nuevoEstado === estado) return;
     setCargando(nuevoEstado);
     try {
-      await fetch("/api/leads/" + id, {
+      const res = await fetch("/api/leads/" + id, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estado: nuevoEstado }),
       });
-      setEstado(nuevoEstado);
+      if (res.ok) setEstado(nuevoEstado);
     } catch {
       console.error("Error cambiando estado");
     } finally {
