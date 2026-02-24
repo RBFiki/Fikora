@@ -22,6 +22,7 @@ export default function Navbar() {
         <div className="flex gap-1">
           {[
             { href: "/dashboard", label: "Leads" },
+            { href: "/dashboard/campanas", label: "Campañas" },
             { href: "/dashboard/configuracion", label: "Configuracion" },
           ].map((item) => (
             <Link
