@@ -10,10 +10,10 @@ export default function AccionesLead({ id, estadoActual }: { id: string; estadoA
   const cambiarEstado = async (estado: string) => {
     setCargando(estado);
     try {
-      await fetch("/api/leads", {
+      await fetch("/api/leads/" + id, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, estado }),
+        body: JSON.stringify({ estado }),
       });
       router.refresh();
     } catch {
@@ -40,9 +40,7 @@ export default function AccionesLead({ id, estadoActual }: { id: string; estadoA
             onClick={() => cambiarEstado(btn.estado)}
             disabled={estadoActual === btn.estado || cargando !== null}
             className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors disabled:opacity-40 ${
-              estadoActual === btn.estado
-                ? btn.color + " opacity-100 cursor-default"
-                : btn.color
+              estadoActual === btn.estado ? btn.color + " opacity-100 cursor-default" : btn.color
             }`}
           >
             {cargando === btn.estado ? "..." : btn.label}
