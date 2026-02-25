@@ -6,15 +6,21 @@ import twilio from "twilio";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-async function getConfig() {
+async function getConfig(telefono: string) {
   try {
-    const { data } = await supabase.from("bots").select("*").eq("id", "00000000-0000-0000-0000-000000000001").single();
+    // Buscar bot por telefono del lead (outbound) o usar el primero disponible (inbound)
+    const { data } = await supabase
+      .from("bots")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
     return data ?? defaultConfig();
   } catch { return defaultConfig(); }
 }
 
 function defaultConfig() {
-  return { nombre_empresa: "nuestra empresa", nombre_agente: "Sara", producto: "", tono: "profesional y amable", objeciones: "", horario_contacto: "Lunes a Viernes 9am-6pm", numero_notificacion: "" };
+  return { nombre_empresa: "nuestra empresa", nombre_agente: "Sara", producto: "", tono: "profesional y amable", objeciones: "", horario_contacto: "Lunes a Viernes 9am-6pm", numero_notificacion: "", calendly_link: "" };
 }
 
 async function getHistorial(telefono: string) {
@@ -100,7 +106,11 @@ export async function POST(request: NextRequest) {
     const mensaje = formData.get("Body") as string;
     const telefono = formData.get("From") as string;
 
-    const [config, historial] = await Promise.all([getConfig(), getHistorial(telefono)]);
+    const [config, historial] = await Promise.all([getConfig(telefono), getHistorial(telefono)]);
+
+    const calendlyInstruccion = config.calendly_link
+      ? `Cuando el cliente confirme su disponibilidad, incluye este link para agendar: ${config.calendly_link}`
+      : "";
 
     const systemPrompt = `Eres ${config.nombre_agente}, agente de ventas de ${config.nombre_empresa}.
 Vendemos: ${config.producto || "nuestros productos"}.
@@ -113,6 +123,7 @@ Tu mision es calificar prospectos siguiendo ESTE ORDEN:
 3. Pregunta su nombre
 4. Pregunta cuando puede hablar con un asesor
 5. Confirma que un asesor lo contactara pronto
+${calendlyInstruccion}
 
 IMPORTANTE: No saltes pasos. Haz UNA pregunta a la vez. Maximo 3 lineas por respuesta. No des precios.
 ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;

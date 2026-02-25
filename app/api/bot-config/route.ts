@@ -1,48 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-
-export async function POST(request: NextRequest) {
-  try {
-    const config = await request.json();
-    const { error } = await supabase
-      .from("bots")
-      .upsert({
-        id: "00000000-0000-0000-0000-000000000001",
-        nombre_empresa: config.nombre_empresa,
-        nombre_agente: config.nombre_agente,
-        producto: config.producto,
-        tono: config.tono,
-        objeciones: config.objeciones,
-        horario_contacto: config.horario_contacto,
-        numero_notificacion: config.numero_notificacion,
-        activo: true,
-      });
-    if (error) throw error;
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("Error:", error);
-    return NextResponse.json({ error: "Error guardando" }, { status: 500 });
-  }
-}
+import { createClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { supabase as supabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from("bots")
-      .select("*")
-      .eq("id", "00000000-0000-0000-0000-000000000001")
-      .single();
-    if (error) throw error;
-    return NextResponse.json(data);
+    const cookieStore = await cookies();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+    const { data } = await supabaseAdmin.from("bots").select("*").eq("user_id", user.id).single();
+    return NextResponse.json(data ?? {});
   } catch {
-    return NextResponse.json({
-      nombre_empresa: "",
-      nombre_agente: "Sara",
-      producto: "",
-      tono: "profesional y amable",
-      objeciones: "",
-      horario_contacto: "Lunes a Viernes 9am - 6pm",
-      numero_notificacion: "",
-    });
+    return NextResponse.json({ error: "Error" }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const cookieStore = await cookies();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+    const body = await request.json();
+    const { data: botExistente } = await supabaseAdmin.from("bots").select("id").eq("user_id", user.id).single();
+
+    if (botExistente) {
+      await supabaseAdmin.from("bots").update(body).eq("user_id", user.id);
+    } else {
+      await supabaseAdmin.from("bots").insert({ ...body, user_id: user.id });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Error" }, { status: 500 });
   }
 }
