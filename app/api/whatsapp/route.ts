@@ -46,19 +46,15 @@ async function analizarConversacion(historial: any[]): Promise<{
 {
   "nombre": "nombre del cliente o null",
   "horario": "horario preferido mencionado o null",
-  "calificado": true/false
+  "calificado": true o false
 }
 
-Un lead esta CALIFICADO si:
-- Mostro interes real en el producto
-- Pidio mas informacion, precios, o hablar con alguien
-- Acepto que lo contacten
-- El agente le confirmo que lo van a contactar
+Un lead esta CALIFICADO solo si SE CUMPLEN LAS TRES condiciones:
+1. El cliente mostro interes claro y especifico en el producto
+2. El agente ya pregunto por el nombre Y el cliente lo dio
+3. El agente ya confirmo que un asesor lo va a contactar
 
-Un lead NO esta calificado si:
-- Solo saludo o pregunto algo general
-- Dijo que no le interesa
-- La conversacion esta apenas empezando`
+Si falta CUALQUIERA de estas tres condiciones, calificado debe ser false.`
         },
         { role: "user", content: conversacion }
       ],
@@ -69,6 +65,19 @@ Un lead NO esta calificado si:
   } catch {
     return { nombre: null, horario: null, calificado: false };
   }
+}
+
+async function leadYaExiste(telefono: string): Promise<boolean> {
+  try {
+    const hace1hora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("telefono", telefono)
+      .eq("tipo", "inbound")
+      .gte("created_at", hace1hora);
+    return (data?.length ?? 0) > 0;
+  } catch { return false; }
 }
 
 async function notificarVendedor(telefono: string, nombre: string | null, conversacion: string, config: any) {
@@ -98,13 +107,14 @@ Vendemos: ${config.producto || "nuestros productos"}.
 Tono: ${config.tono}.
 Horario de atencion: ${config.horario_contacto}.
 
-Tu mision es calificar prospectos de forma natural:
-- Haz UNA pregunta a la vez
-- Entiende su necesidad antes de vender
-- Cuando muestre interes, pregunta su nombre y cuando puede hablar con un asesor
-- Cuando tengas nombre y disponibilidad, confirma que un asesor lo contactara pronto
-- Responde en español, maximo 3 lineas
-- No des precios exactos, eso lo hace el asesor
+Tu mision es calificar prospectos siguiendo ESTE ORDEN:
+1. Saluda y pregunta en que puedes ayudar
+2. Entiende que tipo de producto necesita
+3. Pregunta su nombre
+4. Pregunta cuando puede hablar con un asesor
+5. Confirma que un asesor lo contactara pronto
+
+IMPORTANTE: No saltes pasos. Haz UNA pregunta a la vez. Maximo 3 lineas por respuesta. No des precios.
 ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
 
     historial.push({ role: "user", content: mensaje });
@@ -120,17 +130,10 @@ ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
 
     await saveHistorial(telefono, historial);
 
-    const analisis = await analizarConversacion(historial);
-
-    if (analisis.calificado) {
-      const { data: leadExistente } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("telefono", telefono)
-        .eq("tipo", "inbound")
-        .single();
-
-      if (!leadExistente) {
+    const yaExiste = await leadYaExiste(telefono);
+    if (!yaExiste) {
+      const analisis = await analizarConversacion(historial);
+      if (analisis.calificado) {
         const conversacionCompleta = historial.map((m: any) => m.role + ": " + m.content).join("\n");
         await supabase.from("leads").insert({
           telefono,
@@ -148,7 +151,7 @@ ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
     return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
   } catch (error) {
     console.error("Error:", error);
-    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Message>Disculpa, hubo un error tecnico. Por favor intenta de nuevo.</Message></Response>';
+    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Message>Disculpa, hubo un error tecnico.</Message></Response>';
     return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
   }
 }
