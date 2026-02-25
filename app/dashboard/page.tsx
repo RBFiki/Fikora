@@ -12,7 +12,8 @@ export default async function Dashboard() {
   const { data: bot } = await supabase
     .from("bots")
     .select("*")
-    .eq("id", "00000000-0000-0000-0000-000000000001")
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   const total = leads?.length ?? 0;
@@ -41,6 +42,7 @@ export default async function Dashboard() {
     contactado: { color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
     cerrado: { color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" },
     descartado: { color: "text-zinc-400", bg: "bg-zinc-700/50", border: "border-zinc-600" },
+    pendiente: { color: "text-zinc-400", bg: "bg-zinc-700/50", border: "border-zinc-600" },
   };
 
   return (
