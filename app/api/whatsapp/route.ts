@@ -125,7 +125,7 @@ ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
         const conversacionCompleta = historial.map((m: any) => m.role + ": " + m.content).join("\n");
         await supabase.from("leads").insert({
           telefono, nombre: analisis.nombre, horario_preferido: analisis.horario,
-          estado: "calificado", conversacion: conversacionCompleta, tipo: "inbound",
+          estado: "calificado", conversacion: conversacionCompleta, tipo: "inbound", user_id: "246fdf77-8e2d-4d43-b58d-d826eb1da9b4",
         });
         await notificarVendedor(telefono, analisis.nombre, conversacionCompleta, config);
       }
