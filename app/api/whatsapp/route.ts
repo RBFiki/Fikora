@@ -41,9 +41,9 @@ async function analizarConversacion(historial: any[]): Promise<{ nombre: string 
 {"nombre": "nombre del cliente o null", "horario": "horario preferido o null", "calificado": true o false}
 
 Un lead esta CALIFICADO solo si SE CUMPLEN LAS TRES condiciones:
-1. El cliente mostro interes claro y especifico en el producto
+1. El cliente mostro interes claro en el producto
 2. El cliente dio su nombre
-3. El agente confirmo que un asesor lo va a contactar
+3. El agente confirmo que un asesor lo va a contactar o le envio el link de Calendly
 
 Si falta CUALQUIERA, calificado debe ser false.`
       }, { role: "user", content: conversacion }],
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     const esPrimerMensaje = historial.length === 0;
     const calendlyInstruccion = config.calendly_link
-      ? `Cuando el cliente confirme su disponibilidad para hablar con un asesor, incluye este link para agendar la cita: ${config.calendly_link}`
+      ? `Cuando el cliente confirme su disponibilidad, comparte este link para agendar: ${config.calendly_link}`
       : "";
 
     const systemPrompt = `Eres ${config.nombre_agente}, agente de ventas de ${config.nombre_empresa}.
@@ -93,17 +93,17 @@ Vendemos: ${config.producto || "nuestros productos"}.
 Tono: ${config.tono}.
 Horario de atencion: ${config.horario_contacto}.
 
-${esPrimerMensaje ? `PRIMER MENSAJE: Preséntate diciendo tu nombre y de qué empresa eres. Ejemplo: "¡Hola! Soy ${config.nombre_agente} de ${config.nombre_empresa}. ${config.producto ? `Te puedo ayudar con ${config.producto}.` : ""} ¿En qué te puedo ayudar?"` : ""}
+${esPrimerMensaje ? `PRIMER MENSAJE: Preséntate diciendo exactamente tu nombre completo "${config.nombre_agente}" y de qué empresa eres "${config.nombre_empresa}". Ejemplo: "¡Hola! Soy ${config.nombre_agente} de ${config.nombre_empresa}. ¿En qué te puedo ayudar?"` : ""}
 
-Tu mision es calificar prospectos siguiendo ESTE ORDEN:
-1. Presentate con tu nombre y empresa (solo en el primer mensaje)
-2. Entiende que necesita el cliente
-3. Pregunta su nombre
-4. Pregunta cuando puede hablar con un asesor
-5. Confirma que un asesor lo contactara pronto
-${calendlyInstruccion}
+COMO DEBES COMPORTARTE:
+- Responde preguntas generales sobre los productos con naturalidad — no esquives las preguntas
+- Puedes dar informacion general (tipos de seguros, coberturas generales, procesos) pero NO des precios exactos
+- Se util y construye confianza antes de intentar agendar
+- Cuando el cliente muestre interes real, pregunta su nombre de forma natural
+- Solo cuando tengas su nombre, propone hablar con un asesor para los detalles especificos
+- ${calendlyInstruccion}
+- Maximo 3 lineas por respuesta. Una pregunta a la vez.
 
-IMPORTANTE: Haz UNA pregunta a la vez. Maximo 3 lineas. No des precios.
 ${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
 
     historial.push({ role: "user", content: mensaje });
