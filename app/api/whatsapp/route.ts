@@ -9,12 +9,12 @@ const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_A
 async function getConfig() {
   try {
     const { data } = await supabase.from("bots").select("*").eq("id", "00000000-0000-0000-0000-000000000001").single();
-    return data ?? getDefaultConfig();
-  } catch { return getDefaultConfig(); }
+    return data ?? defaultConfig();
+  } catch { return defaultConfig(); }
 }
 
-function getDefaultConfig() {
-  return { nombre_empresa: "nuestra empresa", nombre_agente: "Sara", producto: "", tono: "profesional y amable", objeciones: "", horario_contacto: "Lunes a Viernes 9am - 6pm", numero_notificacion: "" };
+function defaultConfig() {
+  return { nombre_empresa: "nuestra empresa", nombre_agente: "Sara", producto: "", tono: "profesional y amable", objeciones: "", horario_contacto: "Lunes a Viernes 9am-6pm", numero_notificacion: "" };
 }
 
 async function getHistorial(telefono: string) {
@@ -25,10 +25,16 @@ async function getHistorial(telefono: string) {
 }
 
 async function saveHistorial(telefono: string, historial: any[]) {
-  await supabase.from("conversaciones").upsert({ telefono, historial, updated_at: new Date().toISOString() });
+  try {
+    await supabase.from("conversaciones").upsert({ telefono, historial, updated_at: new Date().toISOString() });
+  } catch (err) { console.error("Error guardando historial:", err); }
 }
 
-async function extraerDatos(historial: any[]): Promise<{ nombre: string | null; horario: string | null }> {
+async function analizarConversacion(historial: any[]): Promise<{
+  nombre: string | null;
+  horario: string | null;
+  calificado: boolean;
+}> {
   try {
     const conversacion = historial.map((m) => m.role + ": " + m.content).join("\n");
     const res = await openai.chat.completions.create({
@@ -36,21 +42,32 @@ async function extraerDatos(historial: any[]): Promise<{ nombre: string | null; 
       messages: [
         {
           role: "system",
-          content: `Extrae el nombre y horario preferido del cliente de esta conversacion. 
-Responde SOLO con JSON valido en este formato exacto:
-{"nombre": "Rafael", "horario": "en 1 hora"}
-Si no encuentras el dato, usa null.
-{"nombre": null, "horario": null}`
+          content: `Analiza esta conversacion de ventas y responde SOLO con JSON valido:
+{
+  "nombre": "nombre del cliente o null",
+  "horario": "horario preferido mencionado o null",
+  "calificado": true/false
+}
+
+Un lead esta CALIFICADO si:
+- Mostro interes real en el producto
+- Pidio mas informacion, precios, o hablar con alguien
+- Acepto que lo contacten
+- El agente le confirmo que lo van a contactar
+
+Un lead NO esta calificado si:
+- Solo saludo o pregunto algo general
+- Dijo que no le interesa
+- La conversacion esta apenas empezando`
         },
         { role: "user", content: conversacion }
       ],
-      max_tokens: 50,
+      max_tokens: 100,
     });
     const texto = res.choices[0].message.content ?? "{}";
-    const limpio = texto.replace(/```json|```/g, "").trim();
-    return JSON.parse(limpio);
+    return JSON.parse(texto.replace(/```json|```/g, "").trim());
   } catch {
-    return { nombre: null, horario: null };
+    return { nombre: null, horario: null, calificado: false };
   }
 }
 
@@ -60,10 +77,10 @@ async function notificarVendedor(telefono: string, nombre: string | null, conver
     await twilioClient.messages.create({
       from: process.env.TWILIO_WHATSAPP_NUMBER,
       to: "whatsapp:" + config.numero_notificacion,
-      body: "Nuevo lead en " + config.nombre_empresa + "!\n\n" +
+      body: "Nuevo lead calificado en " + config.nombre_empresa + "!\n\n" +
         (nombre ? "Nombre: " + nombre + "\n" : "") +
-        "Telefono: " + telefono + "\n\n" +
-        conversacion.slice(-400) + "\n\nContactalo pronto!",
+        "Telefono: " + telefono.replace("whatsapp:", "") + "\n\n" +
+        "Ultimo mensaje:\n" + conversacion.slice(-300),
     });
   } catch (err) { console.error("Error notificando:", err); }
 }
@@ -74,19 +91,21 @@ export async function POST(request: NextRequest) {
     const mensaje = formData.get("Body") as string;
     const telefono = formData.get("From") as string;
 
-    const config = await getConfig();
-    const historial = await getHistorial(telefono);
+    const [config, historial] = await Promise.all([getConfig(), getHistorial(telefono)]);
 
-    const systemPrompt = `Eres ${config.nombre_agente || "Sara"}, agente de ventas de ${config.nombre_empresa || "nuestra empresa"}.
+    const systemPrompt = `Eres ${config.nombre_agente}, agente de ventas de ${config.nombre_empresa}.
 Vendemos: ${config.producto || "nuestros productos"}.
 Tono: ${config.tono}.
 Horario de atencion: ${config.horario_contacto}.
-Tu mision es tener una conversacion natural y conectar al cliente con un asesor cuando este listo.
-- Haz UNA pregunta a la vez.
-- Cuando el cliente muestre interes, pregunta su nombre y horario para contactarle.
-- Cuando tengas nombre y horario, confirma que un asesor le contactara pronto.
-- Responde en español, maximo 3 lineas. No des precios.
-${config.objeciones ? "\nObjeciones:\n" + config.objeciones : ""}`;
+
+Tu mision es calificar prospectos de forma natural:
+- Haz UNA pregunta a la vez
+- Entiende su necesidad antes de vender
+- Cuando muestre interes, pregunta su nombre y cuando puede hablar con un asesor
+- Cuando tengas nombre y disponibilidad, confirma que un asesor lo contactara pronto
+- Responde en español, maximo 3 lineas
+- No des precios exactos, eso lo hace el asesor
+${config.objeciones ? "\nManejo de objeciones:\n" + config.objeciones : ""}`;
 
     historial.push({ role: "user", content: mensaje });
 
@@ -98,30 +117,38 @@ ${config.objeciones ? "\nObjeciones:\n" + config.objeciones : ""}`;
 
     const textoRespuesta = respuesta.choices[0].message.content ?? "Disculpa, hubo un error.";
     historial.push({ role: "assistant", content: textoRespuesta });
+
     await saveHistorial(telefono, historial);
 
-    const estaCalificado = textoRespuesta.toLowerCase().includes("asesor") &&
-      (textoRespuesta.toLowerCase().includes("contactar") || textoRespuesta.toLowerCase().includes("llamar") || textoRespuesta.toLowerCase().includes("pronto"));
+    const analisis = await analizarConversacion(historial);
 
-    if (estaCalificado) {
-      const { nombre, horario } = await extraerDatos(historial);
-      const conversacionCompleta = historial.map((m: any) => m.role + ": " + m.content).join("\n");
-      await supabase.from("leads").insert({
-        telefono,
-        nombre,
-        horario_preferido: horario,
-        estado: "calificado",
-        conversacion: conversacionCompleta,
-        bot_id: null,
-      });
-      await notificarVendedor(telefono, nombre, conversacionCompleta, config);
+    if (analisis.calificado) {
+      const { data: leadExistente } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("telefono", telefono)
+        .eq("tipo", "inbound")
+        .single();
+
+      if (!leadExistente) {
+        const conversacionCompleta = historial.map((m: any) => m.role + ": " + m.content).join("\n");
+        await supabase.from("leads").insert({
+          telefono,
+          nombre: analisis.nombre,
+          horario_preferido: analisis.horario,
+          estado: "calificado",
+          conversacion: conversacionCompleta,
+          tipo: "inbound",
+        });
+        await notificarVendedor(telefono, analisis.nombre, conversacionCompleta, config);
+      }
     }
 
     const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Message>' + textoRespuesta + '</Message></Response>';
     return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
   } catch (error) {
     console.error("Error:", error);
-    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Message>Disculpa, hubo un error tecnico.</Message></Response>';
+    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Message>Disculpa, hubo un error tecnico. Por favor intenta de nuevo.</Message></Response>';
     return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
   }
 }
